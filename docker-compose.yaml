@@ -1,0 +1,32 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: domain-monitor-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: domain_monitor
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  signal-cli:
+    image: bbernhard/signal-cli-rest-api:latest
+    container_name: domain-monitor-signal
+    environment:
+      - MODE=json-rpc
+    ports:
+      - "8080:8080"
+    volumes:
+      - signal_data:/home/.local/share/signal-cli
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  signal_data:
