@@ -1,98 +1,267 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Domain Monitor & Search Bot
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Multi-service NestJS application with two standalone services:
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+- **Monitor** — Scheduled domain availability monitoring with Signal/VipTalk notifications
+- **Search Bot** — Signal group bot that responds to `/search {keyword}` with Google results via SerpAPI
 
-## Description
+---
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Prerequisites
 
-## Project setup
+| Requirement             | Version                                                                           |
+| ----------------------- | --------------------------------------------------------------------------------- |
+| Node.js                 | 22+                                                                               |
+| pnpm                    | 9+                                                                                |
+| Docker & Docker Compose | Latest                                                                            |
+| signal-cli-rest-api     | [bbernhard/signal-cli-rest-api](https://github.com/bbernhard/signal-cli-rest-api) |
+| SerpAPI account         | [serpapi.com](https://serpapi.com) (search bot only)                              |
+
+---
+
+## 1. Configure Environment
 
 ```bash
-$ pnpm install
+cp .env.example .env
 ```
 
-## Compile and run the project
+Edit `.env` with your values. Here's a breakdown of all variables:
+
+### App
+
+| Variable   | Description                                | Default       |
+| ---------- | ------------------------------------------ | ------------- |
+| `PORT`     | HTTP server port                           | `3000`        |
+| `NODE_ENV` | Environment (`development` / `production`) | `development` |
+
+### Database
+
+| Variable            | Description         | Default          |
+| ------------------- | ------------------- | ---------------- |
+| `DATABASE_HOST`     | PostgreSQL host     | `localhost`      |
+| `DATABASE_PORT`     | PostgreSQL port     | `5432`           |
+| `DATABASE_USER`     | PostgreSQL user     | `postgres`       |
+| `DATABASE_PASSWORD` | PostgreSQL password | `postgres`       |
+| `DATABASE_NAME`     | Database name       | `domain_monitor` |
+
+### API Security
+
+| Variable  | Description                              | Default |
+| --------- | ---------------------------------------- | ------- |
+| `API_KEY` | API key for the monitor webhook endpoint | —       |
+
+### Signal Bot
+
+| Variable          | Description                         | Example                 |
+| ----------------- | ----------------------------------- | ----------------------- |
+| `SIGNAL_API_URL`  | signal-cli REST API base URL        | `http://localhost:8080` |
+| `SIGNAL_ACCOUNT`  | Your registered Signal phone number | `+841234567890`         |
+| `SIGNAL_GROUP_ID` | Signal group ID to send messages to | `RtinXRAcpX/rgUJL...`   |
+
+> **How to get your group ID:**
+>
+> ```bash
+> curl http://localhost:8080/v1/groups/<your-number>
+> ```
+>
+> Use the `id` field from the response.
+
+### VipTalk Bot
+
+| Variable            | Description              | Example                    |
+| ------------------- | ------------------------ | -------------------------- |
+| `VIPTALK_API_URL`   | VipTalk API base URL     | `https://api.viptalk.org`  |
+| `VIPTALK_BOT_TOKEN` | Bot authentication token | —                          |
+| `VIPTALK_ROOM_ID`   | Target room ID           | `!room:matrix.viptalk.org` |
+
+### Bot Behavior
+
+| Variable                | Description                         | Default  |
+| ----------------------- | ----------------------------------- | -------- |
+| `BOT_TIMEOUT_MS`        | HTTP request timeout (ms)           | `10000`  |
+| `BOT_RETRY_ATTEMPTS`    | Number of retry attempts on failure | `3`      |
+| `NOTIFICATION_PROVIDER` | `signal` or `viptalk`               | `signal` |
+
+### SerpAPI (Search Bot)
+
+| Variable                | Description                                    | Default      |
+| ----------------------- | ---------------------------------------------- | ------------ |
+| `SERPAPI_API_KEY`       | Your SerpAPI key **(required for search bot)** | —            |
+| `SERPAPI_ENGINE`        | Search engine                                  | `google`     |
+| `SERPAPI_GL`            | Country code                                   | `vn`         |
+| `SERPAPI_HL`            | Language                                       | `vi`         |
+| `SERPAPI_LOCATION`      | Geographic origin                              | `Vietnam`    |
+| `SERPAPI_GOOGLE_DOMAIN` | Regional Google domain                         | `google.com` |
+| `SERPAPI_NUM`           | Number of results to return                    | `10`         |
+| `SERPAPI_DEVICE_MB`     | Device type for results                        | `mobile`     |
+
+---
+
+## 2. Setup Infrastructure
+
+Start PostgreSQL and signal-cli via Docker Compose:
 
 ```bash
-# development
-$ pnpm run start
-
-# watch mode
-$ pnpm run start:dev
-
-# production mode
-$ pnpm run start:prod
+docker compose up -d
 ```
 
-## Run tests
+This starts:
+
+| Container               | Image                           | Port | Purpose                              |
+| ----------------------- | ------------------------------- | ---- | ------------------------------------ |
+| `domain-monitor-db`     | `postgres:16-alpine`            | 5432 | Database                             |
+| `domain-monitor-signal` | `bbernhard/signal-cli-rest-api` | 8080 | Signal messaging API (`native` mode) |
+
+### Link signal-cli to your phone
+
+1. Open `http://localhost:8080/v1/qrcodelink?device_name=domain-monitor` in your browser
+2. Scan the QR code with Signal on your phone (Settings → Linked Devices → Link New Device)
+3. Verify: `curl http://localhost:8080/v1/about`
+
+---
+
+## 3. Run Migrations
 
 ```bash
-# unit tests
-$ pnpm run test
+# Install dependencies
+pnpm install
 
-# e2e tests
-$ pnpm run test:e2e
+# Apply existing migrations
+pnpm migration:run
 
-# test coverage
-$ pnpm run test:cov
+# After entity changes, generate a new migration
+pnpm migration:compare
 ```
 
-## Deployment
+---
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## 4. Development
 
 ```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
+# Start the monitor service (domain availability checks)
+pnpm dev monitor
+
+# Start the search bot (Signal /search command handler)
+pnpm dev search
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+Both services use `nest start --watch` for hot-reload during development.
 
-## Resources
+---
 
-Check out a few resources that may come in handy when working with NestJS:
+## 5. Production Deployment
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+### Build
 
-## Support
+```bash
+pnpm build
+```
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+### Run with Node
 
-## Stay in touch
+```bash
+# Monitor service
+pnpm monitor:prod
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+# Search bot service
+pnpm search:prod
+```
 
-## License
+### Run with Docker
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Add an `app` service to `docker-compose.yaml` for containerized deployment:
+
+```yaml
+app:
+  build: .
+  env_file: .env
+  depends_on:
+    postgres:
+      condition: service_healthy
+    signal-cli:
+      condition: service_started
+  command: ['node', 'dist/cmd/search/main']
+  restart: unless-stopped
+```
+
+Then:
+
+```bash
+docker compose up -d --build
+docker compose logs -f app
+```
+
+---
+
+## Architecture
+
+### How the Search Bot Works
+
+```
+Signal Group → signal-cli (native mode, port 8080)
+                    ↓
+         Search Bot polls GET /v1/receive/{number}
+         every 5 seconds via @nestjs/schedule
+                    ↓
+         Filters messages starting with /search
+                    ↓
+         Queries SerpAPI for Google results
+                    ↓
+         Sends response via POST /v2/send
+         back to the Signal group
+                    ↓
+         Logs to search_logs table in PostgreSQL
+```
+
+The bot handles both:
+
+- **`dataMessage`** — messages from other users in the group
+- **`syncMessage.sentMessage`** — messages sent from your own linked device
+
+### Commands
+
+| Command                | Description                          |
+| ---------------------- | ------------------------------------ |
+| `/search <keyword>`    | Search Google and return top results |
+| `/search` (no keyword) | Show usage guide                     |
+
+### Error Messages (Vietnamese)
+
+| Scenario        | Message                                            |
+| --------------- | -------------------------------------------------- |
+| Timeout         | `Tìm kiếm bị timeout sau 15s. Vui lòng thử lại.`   |
+| Invalid API key | `API key không hợp lệ.`                            |
+| Quota exceeded  | `API key đã hết quota.`                            |
+| Rate limited    | `Quá nhiều yêu cầu. Vui lòng thử lại sau ít phút.` |
+| Unexpected      | `Đã xảy ra lỗi không mong muốn.`                   |
+
+---
+
+## Project Structure
+
+```
+src/
+├── cmd/
+│   ├── monitor/                  # Monitor app entry
+│   │   ├── main.ts
+│   │   └── app.module.ts
+│   └── search/                   # Search bot app entry
+│       ├── main.ts
+│       └── app.module.ts
+├── modules/
+│   ├── database/
+│   │   ├── entities/
+│   │   │   ├── domain-monitor-log.entity.ts
+│   │   │   └── search-log.entity.ts
+│   │   └── migrations/
+│   ├── domain-monitor/           # Domain monitoring logic
+│   ├── notification/             # Signal & VipTalk notification services
+│   └── search-bot/               # Search bot module
+│       ├── interfaces/
+│       ├── signal-listener.service.ts   # Polls signal-cli for messages
+│       ├── search-bot.service.ts        # Command handler & formatter
+│       ├── search-bot.module.ts
+│       └── serpapi.service.ts           # Google search via SerpAPI
+├── data-source.ts                # TypeORM CLI data source
+└── main.ts                       # Default entry (monitor)
+```

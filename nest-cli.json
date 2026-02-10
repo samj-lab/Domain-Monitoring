@@ -7,14 +7,10 @@
   },
   "projects": {
     "search": {
-      "type": "application",
-      "root": "cmd/search",
-      "entryFile": "main"
+      "sourceRoot": "cmd/search"
     },
     "monitor": {
-      "type": "application",
-      "root": "cmd/monitor",
-      "entryFile": "main"
+      "sourceRoot": "cmd/monitor"
     }
   }
 }

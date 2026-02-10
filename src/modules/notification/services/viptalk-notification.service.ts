@@ -1,10 +1,9 @@
 import { ConfigService } from '@nestjs/config';
+import ky, { type HTTPError } from 'ky';
 import { PinoLogger } from 'nestjs-pino';
 import { INotificationService } from '../interfaces/notification.interface';
 
 const MAX_MESSAGE_LENGTH = 4096;
-const DEFAULT_TIMEOUT_MS = 10000;
-const DEFAULT_RETRY_ATTEMPTS = 3;
 
 export class VipTalkNotificationService implements INotificationService {
   private readonly baseUrl: string;
@@ -23,11 +22,8 @@ export class VipTalkNotificationService implements INotificationService {
 
     this.botToken = this.configService.get<string>('VIPTALK_BOT_TOKEN') || '';
     this.roomId = this.configService.get<string>('VIPTALK_ROOM_ID') || '';
-    this.timeout =
-      this.configService.get<number>('BOT_TIMEOUT_MS') || DEFAULT_TIMEOUT_MS;
-    this.maxRetries =
-      this.configService.get<number>('BOT_RETRY_ATTEMPTS') ||
-      DEFAULT_RETRY_ATTEMPTS;
+    this.timeout = this.configService.get<number>('BOT_TIMEOUT_MS') || 10_000;
+    this.maxRetries = this.configService.get<number>('BOT_RETRY_ATTEMPTS') || 3;
   }
 
   getProviderName(): string {
@@ -47,108 +43,47 @@ export class VipTalkNotificationService implements INotificationService {
       'Sending message to VipTalk room',
     );
 
-    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
-      try {
-        const success = await this.attemptSend(
-          truncatedMessage,
-          correlationId,
-          attempt,
-        );
-        if (success) {
-          this.logger.info(
-            { correlationId, attempt },
-            'Message sent successfully on attempt',
-          );
-          return true;
-        }
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        this.logger.error(
-          {
-            correlationId,
-            attempt,
-            maxRetries: this.maxRetries,
-            errorMessage,
-          },
-          'Attempt failed',
-        );
-
-        if (attempt < this.maxRetries) {
-          const delay = this.getBackoffDelay(attempt);
-          this.logger.info({ correlationId, delay }, 'Retrying');
-          await this.sleep(delay);
-        }
-      }
-    }
-
-    this.logger.error(
-      { correlationId, maxRetries: this.maxRetries },
-      'All attempts failed',
-    );
-    return false;
-  }
-
-  private async attemptSend(
-    message: string,
-    correlationId: string,
-    attempt: number,
-  ): Promise<boolean> {
     const url = `${this.baseUrl}/v1/bot/${this.botToken}/sendMessage`;
-
-    // VipTalk uses application/x-www-form-urlencoded
     const body = new URLSearchParams({
-      text: message,
+      text: truncatedMessage,
       roomIds: this.roomId,
     });
 
-    this.logger.debug(
-      { correlationId, attempt, url, roomId: this.roomId },
-      'Attempt send via VipTalk REST API',
-    );
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      await ky.post(url, {
         body: body.toString(),
-        signal: controller.signal,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        timeout: this.timeout,
+        retry: {
+          limit: this.maxRetries,
+          methods: ['post'],
+          backoffLimit: 4000,
+        },
       });
 
-      clearTimeout(timeoutId);
-
-      const responseText = await response.text();
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${responseText}`);
-      }
-
-      // Try to parse response for logging
-      try {
-        const data = JSON.parse(responseText) as Record<string, unknown>;
-        this.logger.debug(
-          { correlationId, response: data },
-          'VipTalk API response',
-        );
-      } catch {
-        this.logger.debug(
-          { correlationId, response: responseText },
-          'VipTalk API response',
-        );
-      }
+      this.logger.info({ correlationId }, 'Message sent successfully');
 
       return true;
     } catch (error) {
-      clearTimeout(timeoutId);
-
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error(`Request timeout after ${this.timeout}ms`);
+      if (error && typeof error === 'object' && 'response' in error) {
+        const httpError = error as HTTPError;
+        const errorText = await httpError.response
+          .text()
+          .catch(() => 'Unknown error');
+        this.logger.error(
+          { correlationId, status: httpError.response.status, errorText },
+          'All attempts failed',
+        );
+      } else {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        this.logger.error(
+          { correlationId, errorMessage },
+          'All attempts failed',
+        );
       }
 
-      throw error;
+      return false;
     }
   }
 
@@ -162,14 +97,5 @@ export class VipTalkNotificationService implements INotificationService {
       message.substring(0, MAX_MESSAGE_LENGTH - truncationNotice.length) +
       truncationNotice
     );
-  }
-
-  private getBackoffDelay(attempt: number): number {
-    // Exponential backoff: 1s, 2s, 4s
-    return Math.pow(2, attempt - 1) * 1000;
-  }
-
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

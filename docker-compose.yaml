@@ -20,7 +20,7 @@ services:
     image: bbernhard/signal-cli-rest-api:latest
     container_name: domain-monitor-signal
     environment:
-      - MODE=json-rpc
+      - MODE=native
     ports:
       - "8080:8080"
     volumes:
