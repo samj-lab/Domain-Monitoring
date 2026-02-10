@@ -114,9 +114,18 @@ This starts:
 
 ### Link signal-cli to your phone
 
-1. Open `http://localhost:8080/v1/qrcodelink?device_name=domain-monitor` in your browser
-2. Scan the QR code with Signal on your phone (Settings → Linked Devices → Link New Device)
-3. Verify: `curl http://localhost:8080/v1/about`
+Run the setup script — it handles container restart, QR code generation, linking, and group discovery:
+
+```bash
+./scripts/signal-setup.sh
+```
+
+The script will:
+
+1. Restart the signal-cli container with fresh data
+2. Open a QR code in your browser
+3. Wait for you to scan it with Signal (Settings → Linked Devices → Link New Device)
+4. Display your available Signal groups and their IDs
 
 ---
 

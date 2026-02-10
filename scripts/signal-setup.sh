@@ -115,8 +115,8 @@ while [ $WAITED -lt $MAX_WAIT ]; do
         echo -e "  Registered account: ${GREEN}${PHONE}${NC}"
         break
     fi
-    sleep 3
-    WAITED=$((WAITED + 3))
+    sleep 1
+    WAITED=$((WAITED + 1))
     echo -ne "\r${YELLOW}⏳ Waiting... (${WAITED}s/${MAX_WAIT}s)${NC}   "
 done
 
