@@ -1,7 +1,7 @@
 import { Controller, Get, Res, UseGuards } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
-import { ApiKeyGuard } from './modules/domain-monitor/guards/api-key.guard';
+import { ApiKeyGuard } from '../../modules/domain-monitor/guards/api-key.guard';
 
 @Controller()
 export class AppController {

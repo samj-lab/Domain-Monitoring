@@ -4,5 +4,17 @@
   "sourceRoot": "src",
   "compilerOptions": {
     "deleteOutDir": true
+  },
+  "projects": {
+    "search": {
+      "type": "application",
+      "root": "cmd/search",
+      "entryFile": "main"
+    },
+    "monitor": {
+      "type": "application",
+      "root": "cmd/monitor",
+      "entryFile": "main"
+    }
   }
 }
