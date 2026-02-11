@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
@@ -21,7 +22,22 @@ export class SummaryReportService {
     private readonly messageFormatter: MessageFormatterService,
     @InjectPinoLogger(SummaryReportService.name)
     private readonly logger: PinoLogger,
+    private readonly configService: ConfigService,
   ) {}
+
+  private getGroupId(): string {
+    if (this.notificationService.getProviderName().toLowerCase() === 'signal') {
+      return this.configService.getOrThrow<string>('SIGNAL_GROUP_ID');
+    }
+
+    if (
+      this.notificationService.getProviderName().toLowerCase() === 'viptalk'
+    ) {
+      return this.configService.getOrThrow<string>('VIPTALK_ROOM_ID');
+    }
+
+    throw new Error('Unsupported notification provider');
+  }
 
   @Cron(CronExpression.EVERY_2_HOURS)
   async handleCron(): Promise<void> {
@@ -46,7 +62,10 @@ export class SummaryReportService {
       // Send all message parts
       let allSuccess = true;
       for (let i = 0; i < messages.length; i++) {
-        const success = await this.notificationService.sendMessage(messages[i]);
+        const success = await this.notificationService.sendMessage({
+          message: messages[i],
+          groupId: this.getGroupId(),
+        });
         if (!success) {
           allSuccess = false;
           this.logger.warn(

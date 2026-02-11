@@ -49,7 +49,7 @@ export class SignalListenerService {
       this.logger.info({ count: messages.length }, 'Received Signal messages');
 
       for (const msg of messages) {
-        this.handleMessage(msg);
+        void this.handleMessage(msg);
       }
     } catch (error: unknown) {
       if (error instanceof Error && error.name === 'AbortError') {
@@ -59,7 +59,27 @@ export class SignalListenerService {
     }
   }
 
-  private handleMessage(payload: SignalWebhookEnvelope): void {
+  private async getGroupId(groupId: string) {
+    if (groupId.startsWith('group.')) {
+      return groupId;
+    }
+
+    const groups = await ky
+      .get(
+        `${this.signalApiUrl}/v1/groups/${encodeURIComponent(this.signalAccount)}`,
+        { timeout: this.timeout, retry: 0 },
+      )
+      .json<{ id: string; internal_id: string }[]>();
+
+    const id = groups.find((group) => group.internal_id === groupId)?.id;
+    if (!id) {
+      throw new Error(`Group not found: ${groupId}`);
+    }
+
+    return id;
+  }
+
+  private async handleMessage(payload: SignalWebhookEnvelope): Promise<void> {
     const envelope = payload.envelope;
     if (!envelope) return;
 
@@ -69,9 +89,11 @@ export class SignalListenerService {
     if (!msgData?.message) return;
 
     const message = msgData.message;
-    const groupId = msgData.groupInfo?.groupId;
+    let groupId = msgData.groupInfo?.groupId;
 
     if (!groupId) return;
+    groupId = await this.getGroupId(groupId);
+
     if (!message.startsWith(SEARCH_COMMAND_PREFIX)) return;
 
     const keyword = message.slice(SEARCH_COMMAND_PREFIX.length).trim();

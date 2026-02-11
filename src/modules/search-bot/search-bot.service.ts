@@ -128,7 +128,10 @@ export class SearchBotService {
   }
 
   private async sendReply(groupId: string, message: string): Promise<void> {
-    const sent = await this.notificationService.sendMessage(message);
+    const sent = await this.notificationService.sendMessage({
+      groupId,
+      message,
+    });
     if (!sent) {
       this.logger.error({ groupId }, 'Failed to send reply to Signal group');
     }

@@ -8,7 +8,6 @@ const MAX_MESSAGE_LENGTH = 4096;
 export class VipTalkNotificationService implements INotificationService {
   private readonly baseUrl: string;
   private readonly botToken: string;
-  private readonly roomId: string;
   private readonly timeout: number;
   private readonly maxRetries: number;
 
@@ -19,9 +18,7 @@ export class VipTalkNotificationService implements INotificationService {
     this.baseUrl =
       this.configService.get<string>('VIPTALK_API_URL') ||
       'https://api.viptalk.org';
-
     this.botToken = this.configService.get<string>('VIPTALK_BOT_TOKEN') || '';
-    this.roomId = this.configService.get<string>('VIPTALK_ROOM_ID') || '';
     this.timeout = this.configService.get<number>('BOT_TIMEOUT_MS') || 10_000;
     this.maxRetries = this.configService.get<number>('BOT_RETRY_ATTEMPTS') || 3;
   }
@@ -30,15 +27,19 @@ export class VipTalkNotificationService implements INotificationService {
     return 'VipTalk';
   }
 
-  async sendMessage(message: string): Promise<boolean> {
+  async sendMessage(input: {
+    groupId: string;
+    message: string;
+  }): Promise<boolean> {
     const correlationId = `vtk-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    const { groupId, message } = input;
     const truncatedMessage = this.truncateMessage(message);
 
     this.logger.debug(
       {
         correlationId,
         chars: truncatedMessage.length,
-        roomId: this.roomId,
+        roomId: groupId,
       },
       'Sending message to VipTalk room',
     );
@@ -46,7 +47,7 @@ export class VipTalkNotificationService implements INotificationService {
     const url = `${this.baseUrl}/v1/bot/${this.botToken}/sendMessage`;
     const body = new URLSearchParams({
       text: truncatedMessage,
-      roomIds: this.roomId,
+      roomIds: groupId,
     });
 
     try {

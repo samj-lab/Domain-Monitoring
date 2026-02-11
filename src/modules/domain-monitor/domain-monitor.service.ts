@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 import timezone from 'dayjs/plugin/timezone';
@@ -34,6 +35,7 @@ export class DomainMonitorService {
     private readonly messageFormatter: MessageFormatterService,
     @InjectPinoLogger(DomainMonitorService.name)
     private readonly logger: PinoLogger,
+    private readonly configService: ConfigService,
   ) {}
 
   /**
@@ -47,6 +49,20 @@ export class DomainMonitorService {
       'Asia/Ho_Chi_Minh',
     );
     return parsed.utc().toDate();
+  }
+
+  private getGroupId(): string {
+    if (this.notificationService.getProviderName().toLowerCase() === 'signal') {
+      return this.configService.getOrThrow<string>('SIGNAL_GROUP_ID');
+    }
+
+    if (
+      this.notificationService.getProviderName().toLowerCase() === 'viptalk'
+    ) {
+      return this.configService.getOrThrow<string>('VIPTALK_ROOM_ID');
+    }
+
+    throw new Error('Unsupported notification provider');
   }
 
   async saveLogs(dto: CreateDomainLogDto): Promise<SaveLogsResult> {
@@ -91,8 +107,10 @@ export class DomainMonitorService {
       if (failedDomainLogs.length > 0) {
         const alertMessage =
           this.messageFormatter.formatBatchAlertMessage(failedDomainLogs);
-        const success =
-          await this.notificationService.sendMessage(alertMessage);
+        const success = await this.notificationService.sendMessage({
+          message: alertMessage,
+          groupId: this.getGroupId(),
+        });
 
         // Batch update all failed logs with notification status
         const failedIds = failedDomainLogs.map((log) => log.id);

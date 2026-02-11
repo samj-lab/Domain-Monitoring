@@ -16,7 +16,6 @@ interface SendResponse {
 export class SignalNotificationService implements INotificationService {
   private readonly baseUrl: string;
   private readonly account: string;
-  private readonly groupId: string;
   private readonly timeout: number;
   private readonly maxRetries: number;
 
@@ -29,7 +28,6 @@ export class SignalNotificationService implements INotificationService {
       'http://localhost:8080';
 
     this.account = this.configService.get<string>('SIGNAL_ACCOUNT') || '';
-    this.groupId = this.configService.get<string>('SIGNAL_GROUP_ID') || '';
     this.timeout = this.configService.get<number>('BOT_TIMEOUT_MS') || 10_000;
     this.maxRetries = this.configService.get<number>('BOT_RETRY_ATTEMPTS') || 3;
   }
@@ -38,7 +36,12 @@ export class SignalNotificationService implements INotificationService {
     return 'Signal';
   }
 
-  async sendMessage(message: string): Promise<boolean> {
+  async sendMessage(input: {
+    groupId: string;
+    message: string;
+  }): Promise<boolean> {
+    const { groupId, message } = input;
+
     const correlationId = `sig-${Date.now()}-${Math.random().toString(36).substring(7)}`;
     const truncatedMessage = this.truncateMessage(message);
 
@@ -47,7 +50,7 @@ export class SignalNotificationService implements INotificationService {
         correlationId,
         chars: truncatedMessage.length,
         account: this.account,
-        groupId: this.groupId,
+        groupId,
       },
       'Sending message to Signal group',
     );
@@ -56,7 +59,7 @@ export class SignalNotificationService implements INotificationService {
     const payload = {
       message: truncatedMessage,
       number: this.account,
-      recipients: [this.groupId],
+      recipients: [groupId],
     };
 
     try {
